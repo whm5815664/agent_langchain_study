@@ -1,0 +1,43 @@
+帮我制作一个skills，名称为django-db-query，功能为查询数据库中各表的数据，并对数据进行总结。具体要求如下：
+我的数据库有本地数据库与远程数据库，配置为：
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",  # 数据库引擎
+        "NAME": "web_database",  # 数据库名称
+        "HOST": "127.0.0.1",  # 数据库地址，本机 ip 地址 127.0.0.1
+        "PORT": 3306,  # 端口
+        "USER": "root",  # 数据库用户名
+        "PASSWORD": "",  # 数据库密码
+        "OPTIONS": {
+            "charset": "utf8mb4",
+        },
+    },
+    # 远程 MySQL 数据库：pig
+    "pig": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "pig",
+        "HOST": "47.99.61.189",
+        "PORT": 3307,
+        "USER": "zb25",
+        "PASSWORD": "zb123456",
+        "OPTIONS": {
+            "charset": "utf8mb4",
+        },
+    },
+}
+
+其中，远程数据库又称为环境监测数据库。
+远程数据库的表名映射如下：
+| environment_data | 环境监控数据表 |
+| device | 设备表 |
+| base | 基地表 |
+| pig_pigsty | 基地信息表 |
+| pig_farm | 公司表 |
+
+远程数据库字段名称映射如下：
+pigsty_id: 基地编号（基地编号只取数字部分，int类型）
+device_id: 设备编号
+image: 环境监测表中image字段可通过 `http://47.99.61.189:8175/media/` + image 获取图片URL，用户请求时可下载图片存放于 `Django-dashboard\aiModels\agent\temp` 文件夹（使用相对路径）并给出图片的访问链接，本地图片以“session会话id+数字”重命名。
+
+本地数据库字段映射如下：
+base_id：基地编号，对应远程数据库的pigsty_id，用户输入时只取数字部分（例如：输入HB001，远程数据库中对应pig_pigsty为1）
