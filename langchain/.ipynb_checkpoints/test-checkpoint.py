@@ -1,13 +1,10 @@
 # Skills 封装（Runtime + Tools + 辅助函数）
-# 只封装执行层与工具层；用 create_agent / create_deep_agent 挂上 bundle 即可。
+# 只封装执行层与工具层；用 create_agent / create_deep_agent 挂上 skill_tools 即可。
 #
 # 用法示例:
 #   runtime = ClaudeSkillRuntime(skills_dir="./skills", output_dir="./outputs")
-#   bundle = make_skill_tools(runtime)
-#   agent = create_deep_agent(
-#       model=llm, tools=bundle.tools,
-#       system_prompt=bundle.system_prompt, middleware=bundle.middleware, ...
-#   )
+#   skill_tools = make_skill_tools(runtime)
+#   agent = create_deep_agent(model=llm, tools=skill_tools, system_prompt=build_skills_prompt(runtime.output_dir), ...)
 #   chat_stream(agent, build_msg("..."))
 
 from __future__ import annotations
@@ -110,9 +107,7 @@ class ClaudeSkillRuntime:
             "scripts": self.list_scripts(name),
             "hint": (
                 "这是说明书，不是自动执行器。"
-                "请按 content 与 scripts 执行：有脚本用 run_skill_script；"
-                "需临时代码用 run_js_code / run_python_code；"
-                "JS 缺依赖时先 ensure_js_deps。"
+                "请按 content 编写代码，再用 run_js_code / run_python_code / create_docx_file 真正执行并生成文件。"
                 f"生成文件请写入 OUTPUT_DIR={self.output_dir}（环境变量 OUTPUT_DIR 已注入）。"
             ),
         }
@@ -152,6 +147,7 @@ class ClaudeSkillRuntime:
         return result
 
     def run_js_code(self, code: str, filename: str = "_skill_runtime_tmp.js") -> dict[str, Any]:
+        self.ensure_js_deps(["docx"])
         path = self._write_code(filename, code)
         before = self._output_snapshot()
         before_work = self._work_dir_root_output_names()
@@ -160,7 +156,6 @@ class ClaudeSkillRuntime:
         return result
 
     def ensure_js_deps(self, packages: list[str]) -> dict[str, Any]:
-        """按需安装 npm 依赖（任意 skill 通用，不绑定特定包）。"""
         pkg_json = self.work_dir / "package.json"
         node_modules = self.work_dir / "node_modules"
         logs = []
@@ -182,8 +177,6 @@ class ClaudeSkillRuntime:
                 "returncode": r.returncode,
                 "stderr": (r.stderr or "")[-800:],
             })
-            if r.returncode != 0:
-                return {"ok": False, "missing_installed": missing, "logs": logs}
         return {"ok": True, "missing_installed": missing, "logs": logs}
 
     def list_outputs(self, since_epoch: float | None = None) -> list[str]:
@@ -199,6 +192,45 @@ class ClaudeSkillRuntime:
             if f.stat().st_mtime >= since - 1:
                 files.append(str(f.relative_to(self.output_dir)).replace("\\", "/"))
         return sorted(files)
+
+    def create_docx(
+        self,
+        output_filename: str,
+        title: str,
+        paragraphs: list[str] | None = None,
+        bullet_points: list[str] | None = None,
+    ) -> dict[str, Any]:
+        try:
+            from docx import Document
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+        except ImportError:
+            return {"ok": False, "error": "缺少 python-docx，请先 pip install python-docx"}
+
+        paragraphs = paragraphs or []
+        bullet_points = bullet_points or []
+        out = (self.output_dir / output_filename).resolve()
+        if out.suffix.lower() != ".docx":
+            out = out.with_suffix(".docx")
+        if not str(out).startswith(str(self.output_dir)):
+            return {"ok": False, "error": "输出路径必须在 OUTPUT_DIR 内"}
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        doc = Document()
+        h = doc.add_heading(title, level=1)
+        h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for p in paragraphs:
+            doc.add_paragraph(str(p))
+        for b in bullet_points:
+            doc.add_paragraph(str(b), style="List Bullet")
+        doc.save(str(out))
+        rel = str(out.relative_to(self.output_dir)).replace("\\", "/")
+        return {
+            "ok": True,
+            "file": rel,
+            "abs_path": str(out),
+            "output_dir": str(self.output_dir),
+            "size": out.stat().st_size,
+        }
 
     def _get(self, name: str) -> SkillInfo:
         if name not in self.skills:
@@ -297,50 +329,8 @@ class ClaudeSkillRuntime:
 # make_skill_tools（@tool 层）
 # ---------------------------------------------------------------------------
 
-class SkillAgentBundle:
-    """创建 agent 所需的 tools / system_prompt / middleware 打包。"""
-
-    _EXCLUDE_TOOLS = frozenset({"read_file", "write_file", "edit_file", "execute"})
-
-    def __init__(self, tools: list, output_dir: str | Path):
-        self.tools = tools
-        self.output_dir = Path(output_dir)
-        self.system_prompt = self._build_system_prompt()
-        self.middleware = self._build_middleware()
-
-    def _build_system_prompt(self) -> str:
-        """生成 skills 系统提示，注入当前 OUTPUT_DIR。"""
-        return f"""你是 skills_agent：负责「选 skill + 调 Runtime 执行」，兼容任意 Claude Skill。
-
-## 固定流程（缺一不可）
-1. **判断**：list_available_skills → load_skill(skill_name)，严格按 SKILL.md 说明执行
-2. **执行（必须 tool call，禁止只口头说「我将执行」）**：
-   - skill 目录已有脚本 → run_skill_script(skill_name, script_relpath, script_args)
-   - 需按说明书写临时代码 → run_python_code / run_js_code
-   - JS 缺 npm 依赖 → 先 ensure_js_deps(packages_json)，再 run_js_code
-3. **验收**：list_generated_files；无产物则根据 stderr 修复再执行
-
-## 禁止
-- 用 read_file / execute 通读或旁路执行
-- Windows 绝对路径；只用相对路径或 skill 相对脚本路径
-- 只描述不调用 Runtime 工具
-- 为某一类文件写死专用捷径；一律走对应 skill 的说明书 + Runtime 工具
-
-## 约束
-- 生成文件必须写入 OUTPUT_DIR（当前：{self.output_dir}），不要写进 skills/
-- 用 run_js_code / run_python_code 时，通过 process.env.OUTPUT_DIR / os.environ['OUTPUT_DIR'] 取路径
-- 最终回复给出文件相对 OUTPUT_DIR 的路径与大小
-"""
-
-    def _build_middleware(self) -> list:
-        """屏蔽 deep agent 内置文件工具，避免抢 Runtime 执行权。"""
-        from deepagents.middleware._tool_exclusion import _ToolExclusionMiddleware
-
-        return [_ToolExclusionMiddleware(excluded=self._EXCLUDE_TOOLS)]
-
-
-def make_skill_tools(runtime: ClaudeSkillRuntime) -> SkillAgentBundle:
-    """创建绑定到 Runtime 的 tools，并封装为 SkillAgentBundle。"""
+def make_skill_tools(runtime: ClaudeSkillRuntime) -> list:
+    """Create LangChain tools bound to one Runtime instance."""
 
     @tool
     def list_available_skills() -> str:
@@ -377,18 +367,6 @@ def make_skill_tools(runtime: ClaudeSkillRuntime) -> SkillAgentBundle:
         )
 
     @tool
-    def ensure_js_deps(packages_json: str = "[]") -> str:
-        """按需安装 npm 包（JSON 数组，如 ["pptxgenjs","docx"]）。执行 JS 前若缺依赖请先调用。"""
-        try:
-            packages = json.loads(packages_json) if packages_json else []
-            if not isinstance(packages, list):
-                packages = [str(packages)]
-            packages = [str(p).strip() for p in packages if str(p).strip()]
-        except json.JSONDecodeError as e:
-            return json.dumps({"ok": False, "error": f"JSON 解析失败: {e}"}, ensure_ascii=False)
-        return json.dumps(runtime.ensure_js_deps(packages), ensure_ascii=False, indent=2)
-
-    @tool
     def run_js_code(code: str, filename: str = "_skill_runtime_tmp.js") -> str:
         """将 JavaScript 写入工作目录并执行。文件应写到 process.env.OUTPUT_DIR。"""
         return json.dumps(runtime.run_js_code(code, filename), ensure_ascii=False, indent=2)
@@ -397,6 +375,29 @@ def make_skill_tools(runtime: ClaudeSkillRuntime) -> SkillAgentBundle:
     def run_python_code(code: str, filename: str = "_skill_runtime_tmp.py") -> str:
         """将 Python 写入工作目录并执行。生成文件请写到 os.environ['OUTPUT_DIR']。"""
         return json.dumps(runtime.run_python_code(code, filename), ensure_ascii=False, indent=2)
+
+    @tool
+    def create_docx_file(
+        output_filename: str,
+        title: str,
+        paragraphs_json: str = "[]",
+        bullet_points_json: str = "[]",
+    ) -> str:
+        """docx 可靠落盘工具：用 python-docx 生成 .docx（写入 OUTPUT_DIR）。"""
+        try:
+            paragraphs = json.loads(paragraphs_json) if paragraphs_json else []
+            bullets = json.loads(bullet_points_json) if bullet_points_json else []
+            if not isinstance(paragraphs, list):
+                paragraphs = [str(paragraphs)]
+            if not isinstance(bullets, list):
+                bullets = [str(bullets)]
+        except json.JSONDecodeError as e:
+            return json.dumps({"ok": False, "error": f"JSON 解析失败: {e}"}, ensure_ascii=False)
+        return json.dumps(
+            runtime.create_docx(output_filename, title, paragraphs, bullets),
+            ensure_ascii=False,
+            indent=2,
+        )
 
     @tool
     def list_generated_files() -> str:
@@ -411,24 +412,45 @@ def make_skill_tools(runtime: ClaudeSkillRuntime) -> SkillAgentBundle:
             indent=2,
         )
 
-    return SkillAgentBundle(
-        tools=[
-            list_available_skills,
-            load_skill,
-            list_skill_scripts,
-            run_skill_script,
-            ensure_js_deps,
-            run_js_code,
-            run_python_code,
-            list_generated_files,
-        ],
-        output_dir=runtime.output_dir,
-    )
+    return [
+        list_available_skills,
+        load_skill,
+        list_skill_scripts,
+        run_skill_script,
+        run_js_code,
+        run_python_code,
+        create_docx_file,
+        list_generated_files,
+    ]
 
 
 # ---------------------------------------------------------------------------
 # 辅助函数
 # ---------------------------------------------------------------------------
+
+def build_skills_prompt(output_dir: str | Path) -> str:
+    """生成 skills 系统提示，注入当前 OUTPUT_DIR。"""
+    return f"""你是 skills_agent：负责「选 skill + 调 Runtime 执行」。
+
+## 固定两步（缺一不可）
+1. **判断**：list_available_skills → load_skill(skill_name)
+2. **执行（必须 tool call，禁止只口头说「我将执行」）**：
+   - skill 目录已有脚本 → 立刻 run_skill_script(skill_name, script_relpath)
+   - 无现成脚本、要生成 Word → create_docx_file 或 run_js_code
+   - 其他 → run_python_code / run_js_code
+3. **验收**：list_generated_files；无产物则根据 stderr 修复再执行
+
+## 禁止
+- 用 read_file / execute 通读或旁路执行
+- Windows 绝对路径；只用相对路径或 skill 相对脚本路径
+- 只描述不调用 Runtime 工具
+
+## 约束
+- 生成文件必须写入 OUTPUT_DIR（当前：{output_dir}），不要写进 skills/
+- 用 run_js_code / run_python_code 时，通过 process.env.OUTPUT_DIR / os.environ['OUTPUT_DIR'] 取路径
+- 最终回复给出文件相对 OUTPUT_DIR 的路径与大小
+"""
+
 
 def encode_image(path: str | Path) -> str:
     with open(path, "rb") as f:
@@ -481,6 +503,7 @@ def main() -> None:
     from langchain_openai import ChatOpenAI
     from deepagents import create_deep_agent
     from deepagents.backends import LocalShellBackend
+    from deepagents.middleware._tool_exclusion import _ToolExclusionMiddleware
 
     # 脚本所在目录（等同于 notebook 的 cwd）
     current_dir = Path(__file__).resolve().parent
@@ -500,11 +523,11 @@ def main() -> None:
         work_dir=current_dir,
         output_dir=OUTPUT_DIR,
     )
-    bundle = make_skill_tools(runtime)
+    skill_tools = make_skill_tools(runtime)
 
     print("skills:", [s["name"] for s in runtime.list_skills()])
     print("output_dir:", runtime.output_dir)
-    print("tools:", [t.name for t in bundle.tools])
+    print("tools:", [t.name for t in skill_tools])
 
     backend = LocalShellBackend(
         root_dir=str(current_dir),
@@ -513,13 +536,16 @@ def main() -> None:
         timeout=300,
     )
 
+    # 屏蔽 deep agent 内置文件工具，避免抢 Runtime 执行权
+    EXCLUDE = frozenset({"read_file", "write_file", "edit_file", "execute"})
+
     skills_agent = create_deep_agent(
         model=llm,
         backend=backend,
-        tools=bundle.tools,
+        tools=skill_tools,
         skills=["/skills/"],
-        system_prompt=bundle.system_prompt,
-        middleware=bundle.middleware,
+        system_prompt=build_skills_prompt(runtime.output_dir),
+        middleware=[_ToolExclusionMiddleware(excluded=EXCLUDE)],
         name="skills-agent",
     )
 
