@@ -1,0 +1,36 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    "version": "0.2.0",  // 配置文件版本号，指定VS Code调试配置的格式版本
+    "configurations": [    // 调试配置数组，可以包含多个调试配置
+        {
+            "name": "Python Debugger: Django",  // 调试配置的名称，在VS Code调试面板中显示
+            "type": "debugpy",                  // 调试器类型，使用Python调试器
+            "request": "launch",                // 请求类型，launch表示启动新进程进行调试
+            "args": [                           // 传递给程序的命令行参数数组
+                "runserver",                    // Django管理命令，启动开发服务器
+                "127.0.0.1:8000"               // 服务器地址和端口，本地8000端口
+            ],
+            "django": true,                     // 启用Django框架支持，提供Django特定的调试功能
+            "autoStartBrowser": false,          // 是否自动启动浏览器，false表示不自动打开
+            "program": "${workspaceFolder}\\manage.py",  // 要调试的程序文件路径，指向Django的manage.py
+            "env": {                            // 环境变量配置对象
+                "PYTHONUNBUFFERED": "1"         // 设置Python输出不缓冲，确保日志实时显示
+            }
+        },
+        {
+            "name": "Python Debugger: Django (HTTPS runsslserver)",
+            "type": "debugpy",
+            "request": "launch",
+            "args": [
+                "runsslserver",
+                "0.0.0.0:8000"
+            ],
+            "django": true,
+            "autoStartBrowser": false,
+            "program": "${workspaceFolder}\\manage.py",
+            "env": {
+                "PYTHONUNBUFFERED": "1"
+            }
+        }
+    ]
+}

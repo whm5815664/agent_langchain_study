@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>计划清单</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <style>
+    :root {
+      --ink: #1c2a24;
+      --muted: #5f7268;
+      --accent: #0f7a5f;
+      --accent-soft: #d8efe6;
+      --line: rgba(28, 42, 36, 0.1);
+      --danger: #b42318;
+      --warn: #9a6700;
+      --panel: #fff;
+      --bg: #f4f8f6;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      color: var(--ink);
+      font-family: "Noto Sans SC", sans-serif;
+      background: var(--bg);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: 14px 14px 18px;
+      gap: 12px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .toolbar h1 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .toolbar .meta {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .icon-btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      height: 34px;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .icon-btn:hover {
+      border-color: rgba(15, 122, 95, 0.35);
+      background: var(--accent-soft);
+    }
+
+    #list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-right: 2px;
+    }
+
+    .empty {
+      margin: auto;
+      text-align: center;
+      color: var(--muted);
+      padding: 28px 12px;
+      max-width: 260px;
+      line-height: 1.5;
+    }
+
+    .empty strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .plan {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .plan-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .plan-title {
+      margin: 0;
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(15, 122, 95, 0.1);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .badge.paused { background: rgba(154, 103, 0, 0.12); color: var(--warn); }
+    .badge.in_progress { background: rgba(15, 122, 95, 0.16); color: #0a5c47; }
+    .badge.completed { background: rgba(28, 42, 36, 0.08); color: var(--muted); }
+    .badge.cancelled { background: rgba(180, 35, 24, 0.1); color: var(--danger); }
+
+    .plan-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .plan-meta .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+    }
+
+    .plan-meta .label {
+      color: var(--ink);
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .plan-meta .mono {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.75rem;
+    }
+
+    .plan-result {
+      font-size: 0.78rem;
+      color: var(--ink);
+      background: rgba(15, 122, 95, 0.05);
+      border: 1px dashed rgba(15, 122, 95, 0.2);
+      border-radius: 8px;
+      padding: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      word-break: break-word;
+      line-height: 1.45;
+    }
+
+    .plan-result > *:first-child { margin-top: 0; }
+    .plan-result > *:last-child { margin-bottom: 0; }
+
+    .plan-result p { margin: 0.35em 0; }
+    .plan-result ul, .plan-result ol { margin: 0.35em 0; padding-left: 1.2em; }
+    .plan-result table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.4em 0;
+      font-size: 0.75rem;
+    }
+    .plan-result th, .plan-result td {
+      border: 1px solid var(--line);
+      padding: 4px 6px;
+      vertical-align: top;
+    }
+    .plan-result th { background: rgba(15, 122, 95, 0.08); }
+    .plan-result img {
+      display: block;
+      max-width: 100%;
+      max-height: 160px;
+      margin: 6px 0;
+      border-radius: 8px;
+      object-fit: contain;
+      background: #fff;
+    }
+    .plan-result a {
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .actions button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      height: 34px;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .actions button:hover:not(:disabled) {
+      border-color: rgba(15, 122, 95, 0.35);
+      background: var(--accent-soft);
+    }
+
+    .actions button.run {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .actions button.pause { color: var(--warn); }
+    .actions button.note { color: #1a6b9a; }
+    .actions button.delete { color: var(--danger); }
+    .actions button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: #12352b;
+      color: #f5faf7;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 20;
+      max-width: 90%;
+    }
+
+    .toast.show { opacity: 1; }
+
+    .modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(18, 36, 28, 0.38);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 30;
+    }
+
+    .modal-mask.open { display: flex; }
+
+    .modal {
+      width: min(100%, 360px);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 12px 32px rgba(18, 36, 28, 0.16);
+    }
+
+    .modal h3 {
+      margin: 0;
+      font-size: 0.98rem;
+      font-weight: 700;
+    }
+
+    .modal p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .modal textarea {
+      width: 100%;
+      min-height: 110px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      font: inherit;
+      font-size: 0.86rem;
+      line-height: 1.45;
+      color: var(--ink);
+      outline: none;
+    }
+
+    .modal textarea:focus {
+      border-color: rgba(15, 122, 95, 0.45);
+      box-shadow: 0 0 0 3px rgba(15, 122, 95, 0.12);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .modal-actions button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      height: 34px;
+      padding: 0 14px;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .modal-actions .primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .modal-actions .primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>
+      <h1>计划清单</h1>
+      <div class="meta" id="countMeta">加载中…</div>
+    </div>
+    <button type="button" class="icon-btn" id="refreshBtn">刷新</button>
+  </div>
+
+  <div id="list" aria-live="polite"></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="modal-mask" id="noteModal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
+    <div class="modal">
+      <h3 id="noteModalTitle">补充说明</h3>
+      <p>任务向智能体追问或卡住时，在此补充文字，系统会尽快据此继续执行。</p>
+      <textarea id="noteInput" placeholder=""></textarea>
+      <div class="modal-actions">
+        <button type="button" id="noteCancel">取消</button>
+        <button type="button" class="primary" id="noteSubmit">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById("list");
+    const countMeta = document.getElementById("countMeta");
+    const toastEl = document.getElementById("toast");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const noteModal = document.getElementById("noteModal");
+    const noteInput = document.getElementById("noteInput");
+    const noteCancel = document.getElementById("noteCancel");
+    const noteSubmit = document.getElementById("noteSubmit");
+
+    const STATUS_LABEL = {
+      pending: "等待中",
+      in_progress: "执行中",
+      paused: "已暂停",
+      completed: "已完成",
+      cancelled: "已取消",
+    };
+
+    let toastTimer = null;
+    let busyId = null;
+    let lastPlansKey = "";
+    let notePlanId = null;
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+    }
+
+    function getCookie(name) {
+      const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+      return match ? decodeURIComponent(match[2]) : "";
+    }
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    if (window.marked) {
+      marked.setOptions({ gfm: true, breaks: true });
+    }
+
+    function renderResultHtml(markdown) {
+      const source = String(markdown || "");
+      if (!window.marked) return `<pre>${escapeHtml(source)}</pre>`;
+      let html = marked.parse(source);
+      if (window.DOMPurify) html = DOMPurify.sanitize(html);
+      // 正文已有 img 的同路径链接不再转成第二张图
+      const imgKeys = new Set(
+        Array.from(html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi)).map((m) =>
+          String(m[1] || "").split("#")[0].split("?")[0].toLowerCase()
+        )
+      );
+      html = html.replace(
+        /<a\s+[^>]*href="((?:https?:\/\/|\/)[^"]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^"]*)?)"[^>]*>[\s\S]*?<\/a>/gi,
+        (full, url) => {
+          const key = String(url || "").split("#")[0].split("?")[0].toLowerCase();
+          if (key && imgKeys.has(key)) return "";
+          if (key) imgKeys.add(key);
+          return `<img src="${url}" alt="图片" loading="lazy" />`;
+        }
+      );
+      return html;
+    }
+
+    function renderPlans(plans) {
+      const key = JSON.stringify(
+        (plans || []).map((p) => [p.id, p.status, p.run_count, p.next_run, p.last_result])
+      );
+      if (key === lastPlansKey) return;
+      lastPlansKey = key;
+
+      countMeta.textContent = plans.length ? `共 ${plans.length} 条计划` : "暂无计划";
+      if (!plans.length) {
+        listEl.innerHTML =
+          '<div class="empty"><strong>还没有计划</strong>在对话里让助手创建定时/预约任务后，会显示在这里。</div>';
+        return;
+      }
+
+      listEl.innerHTML = plans
+        .map((p) => {
+          const st = p.status || "pending";
+          const canPause = st === "pending" || st === "in_progress";
+          const canRun = st !== "in_progress";
+          const canNote = st !== "cancelled";
+          const result = p.last_result
+            ? `<div class="plan-result">${renderResultHtml(p.last_result)}</div>`
+            : "";
+          return `
+            <article class="plan" data-id="${escapeHtml(p.id)}">
+              <div class="plan-top">
+                <h2 class="plan-title">${escapeHtml(p.title)}</h2>
+                <span class="badge ${st}">${STATUS_LABEL[st] || st}</span>
+              </div>
+              <div class="plan-meta">
+                <div class="row">
+                  <div><span class="label">ID</span><span class="mono">${escapeHtml(p.id)}</span></div>
+                  <div><span class="label">执行次数</span>${p.run_count || 0}</div>
+                </div>
+                <div><span class="label">创建时间</span>${escapeHtml(p.created_at || "-")}</div>
+                <div><span class="label">下次执行时间</span>${escapeHtml(p.next_run || "-")}</div>
+              </div>
+              ${result}
+              <div class="actions">
+                <button type="button" class="run" data-action="execute" ${canRun ? "" : "disabled"}>执行计划</button>
+                <button type="button" class="pause" data-action="pause" ${canPause ? "" : "disabled"}>暂停计划</button>
+                <button type="button" class="note" data-action="note" ${canNote ? "" : "disabled"}>补充说明</button>
+                <button type="button" class="delete" data-action="delete">删除计划</button>
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
+    async function loadPlans() {
+      try {
+        const res = await fetch("/api/plans/", { headers: { Accept: "application/json" } });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "加载失败");
+        renderPlans(data.plans || []);
+      } catch (err) {
+        lastPlansKey = "";
+        countMeta.textContent = "加载失败";
+        listEl.innerHTML =
+          '<div class="empty"><strong>无法加载计划</strong>' +
+          escapeHtml(err.message || String(err)) +
+          "</div>";
+      }
+    }
+
+    async function act(planId, action, body = {}) {
+      if (busyId) return;
+      busyId = planId;
+      try {
+        const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/${action}/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "操作失败");
+        const labels = {
+          pause: "已暂停",
+          execute: "已执行",
+          delete: "已删除",
+          supplement: "已补充说明，正在继续执行",
+        };
+        toast(labels[action] || "完成");
+        lastPlansKey = "";
+        if (data.plans) renderPlans(data.plans);
+        else await loadPlans();
+      } catch (err) {
+        toast(err.message || "操作失败");
+        await loadPlans();
+      } finally {
+        busyId = null;
+      }
+    }
+
+    function openNoteModal(planId) {
+      notePlanId = planId;
+      noteInput.value = "";
+      noteModal.classList.add("open");
+      setTimeout(() => noteInput.focus(), 30);
+    }
+
+    function closeNoteModal() {
+      noteModal.classList.remove("open");
+      notePlanId = null;
+      noteInput.value = "";
+    }
+
+    async function submitNote() {
+      const note = (noteInput.value || "").trim();
+      if (!note) {
+        toast("请输入补充说明");
+        noteInput.focus();
+        return;
+      }
+      if (!notePlanId || busyId) return;
+      const id = notePlanId;
+      noteSubmit.disabled = true;
+      try {
+        closeNoteModal();
+        await act(id, "supplement", { note });
+      } finally {
+        noteSubmit.disabled = false;
+      }
+    }
+
+    listEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if (!btn || btn.disabled) return;
+      const card = btn.closest(".plan");
+      if (!card) return;
+      const action = btn.dataset.action;
+      const id = card.dataset.id;
+      if (action === "note") {
+        openNoteModal(id);
+        return;
+      }
+      if (action === "delete" && !confirm("确定删除该计划？线程将终止。")) return;
+      act(id, action);
+    });
+
+    noteCancel.addEventListener("click", closeNoteModal);
+    noteSubmit.addEventListener("click", submitNote);
+    noteModal.addEventListener("click", (e) => {
+      if (e.target === noteModal) closeNoteModal();
+    });
+    noteInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeNoteModal();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        submitNote();
+      }
+    });
+
+    refreshBtn.addEventListener("click", () => {
+      lastPlansKey = "";
+      loadPlans();
+    });
+    loadPlans();
+    setInterval(loadPlans, 5000);
+  </script>
+</body>
+</html>

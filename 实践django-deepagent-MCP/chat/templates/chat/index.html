@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepAgent · 智能问答</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <style>
+    :root {
+      --bg-top: #e7f0f7;
+      --bg-bottom: #f4f1ea;
+      --ink: #1a2430;
+      --muted: #5c6b7a;
+      --accent: #1f6feb;
+      --accent-soft: #dbe8fb;
+      --user: #15263d;
+      --panel: rgba(255, 255, 255, 0.78);
+      --line: rgba(26, 36, 48, 0.1);
+      --danger: #b42318;
+      --shadow: 0 18px 50px rgba(21, 38, 61, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      font-family: "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(900px 420px at 10% -12%, rgba(31, 111, 235, 0.18), transparent 60%),
+        radial-gradient(700px 360px at 90% 0%, rgba(214, 168, 82, 0.14), transparent 55%),
+        linear-gradient(165deg, var(--bg-top), var(--bg-bottom));
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(880px, 100%);
+      height: min(820px, calc(100vh - 48px));
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: rise 0.5s ease both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    header {
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(1.7rem, 3vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 0;
+    }
+
+    .brand span { color: var(--accent); }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .refresh-btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 14px;
+      height: 42px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+
+    .refresh-btn:hover {
+      border-color: rgba(31, 111, 235, 0.35);
+      background: var(--accent-soft);
+      transform: translateY(-1px);
+    }
+
+    #messages {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 24px 28px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+
+    .empty {
+      margin: auto;
+      text-align: center;
+      color: var(--muted);
+      max-width: 360px;
+    }
+
+    .empty strong {
+      display: block;
+      color: var(--ink);
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    .msg {
+      max-width: min(82%, 680px);
+      padding: 12px 16px;
+      border-radius: 18px;
+      line-height: 1.55;
+      word-break: break-word;
+      animation: bubble 0.25s ease both;
+    }
+
+    @keyframes bubble {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--user);
+      color: #f4f8ff;
+      border-bottom-right-radius: 6px;
+      white-space: pre-wrap;
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-bottom-left-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: min(96%, 760px);
+    }
+
+    .msg .thinking {
+      border: 1px dashed rgba(31, 111, 235, 0.28);
+      border-radius: 12px;
+      background: rgba(31, 111, 235, 0.04);
+      padding: 8px 10px;
+    }
+
+    .msg .thinking[hidden] { display: none; }
+
+    .msg .thinking summary {
+      cursor: pointer;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--muted);
+      list-style: none;
+    }
+
+    .msg .thinking summary::-webkit-details-marker { display: none; }
+
+    .msg .thinking-body {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      max-height: 220px;
+      overflow-y: auto;
+      font-family: "JetBrains Mono", Consolas, monospace;
+    }
+
+    .msg .answer.markdown-body { white-space: normal; }
+    .msg .answer.markdown-body > *:first-child { margin-top: 0 !important; }
+    .msg .answer.markdown-body > *:last-child { margin-bottom: 0 !important; }
+    .msg .answer.markdown-body p { margin: 0.25em 0; }
+    .msg .answer.markdown-body ul,
+    .msg .answer.markdown-body ol { margin: 0.25em 0; padding-left: 1.25em; }
+    .msg .answer.markdown-body pre {
+      margin: 0.45em 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #15263d;
+      color: #e8f0ff;
+      overflow-x: auto;
+    }
+    .msg .answer.markdown-body code {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.9em;
+      padding: 0.12em 0.4em;
+      border-radius: 6px;
+      background: rgba(21, 38, 61, 0.08);
+    }
+    .msg .answer.markdown-body pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+    .msg .answer.markdown-body a { color: var(--accent); }
+
+    .msg.error {
+      align-self: center;
+      background: #fff1f0;
+      color: var(--danger);
+      border: 1px solid rgba(180, 35, 24, 0.2);
+      max-width: 90%;
+    }
+
+    .msg.typing .answer.markdown-body::after {
+      content: "";
+      display: inline-block;
+      width: 0.55em;
+      height: 1.05em;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      background: var(--accent);
+      animation: blink 1s steps(1) infinite;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .composer {
+      padding: 16px 20px 20px;
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 54px;
+      max-height: 160px;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px 16px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    textarea:focus {
+      border-color: rgba(31, 111, 235, 0.45);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+
+    button[type="submit"] {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      min-width: 108px;
+      height: 54px;
+      padding: 0 18px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+
+    button[type="submit"]:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 0; }
+      .shell {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        border: 0;
+      }
+      header, #messages { padding-left: 18px; padding-right: 18px; }
+      .msg { max-width: 90%; }
+      form { grid-template-columns: 1fr; }
+      button[type="submit"] { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1 class="brand">Deep<span>Agent</span></h1>
+        <p class="subtitle">基于 deepagents 的简单智能问答（无数据库）。</p>
+      </div>
+      <button type="button" class="refresh-btn" id="refreshBtn">刷新会话</button>
+    </header>
+
+    <div id="messages" aria-live="polite">
+      <div class="empty" id="emptyState">
+        <strong>开始一段对话</strong>
+        输入问题，按 Enter 发送。
+      </div>
+    </div>
+
+    <div class="composer">
+      <form id="chatForm">
+        <textarea
+          id="input"
+          rows="1"
+          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+          autocomplete="off"
+        ></textarea>
+        <button type="submit" id="sendBtn">发送</button>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    const messagesEl = document.getElementById("messages");
+    let emptyState = document.getElementById("emptyState");
+    const form = document.getElementById("chatForm");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("sendBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    const history = [];
+    let busy = false;
+    let stickToBottom = true;
+    const BOTTOM_THRESHOLD = 80;
+
+    function isNearBottom() {
+      return (
+        messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight <=
+        BOTTOM_THRESHOLD
+      );
+    }
+
+    messagesEl.addEventListener("scroll", () => {
+      stickToBottom = isNearBottom();
+    });
+
+    function scrollMessagesToBottom(force) {
+      if (force || stickToBottom) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        stickToBottom = true;
+      }
+    }
+
+    if (window.marked) {
+      marked.setOptions({ gfm: true, breaks: false });
+    }
+
+    function renderMarkdown(el, markdown) {
+      const source = String(markdown || "");
+      if (!window.marked) {
+        el.textContent = source;
+        return;
+      }
+      let html = marked.parse(source);
+      html = window.DOMPurify ? DOMPurify.sanitize(html) : html;
+      el.innerHTML = html;
+    }
+
+    function getCookie(name) {
+      const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+      return match ? decodeURIComponent(match[2]) : "";
+    }
+
+    function hideEmpty() {
+      if (emptyState) {
+        emptyState.remove();
+        emptyState = null;
+      }
+    }
+
+    function showEmpty() {
+      if (emptyState) return;
+      emptyState = document.createElement("div");
+      emptyState.className = "empty";
+      emptyState.id = "emptyState";
+      emptyState.innerHTML = "<strong>开始一段对话</strong>输入问题，按 Enter 发送。";
+      messagesEl.appendChild(emptyState);
+    }
+
+    function appendMessage(role, content) {
+      hideEmpty();
+      const el = document.createElement("div");
+      el.className = "msg " + role;
+
+      if (role === "assistant") {
+        const thinking = document.createElement("details");
+        thinking.className = "thinking";
+        thinking.hidden = true;
+        thinking.innerHTML =
+          "<summary>思考过程</summary><div class=\"thinking-body\"></div>";
+
+        const answer = document.createElement("div");
+        answer.className = "answer markdown-body";
+        if (content) renderMarkdown(answer, content);
+
+        el.appendChild(thinking);
+        el.appendChild(answer);
+      } else {
+        el.textContent = content;
+      }
+
+      messagesEl.appendChild(el);
+      scrollMessagesToBottom(true);
+      return el;
+    }
+
+    function autoResize() {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 160) + "px";
+    }
+
+    input.addEventListener("input", autoResize);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (busy) return;
+
+      const text = input.value.trim();
+      if (!text) return;
+
+      busy = true;
+      sendBtn.disabled = true;
+      input.value = "";
+      autoResize();
+
+      appendMessage("user", text);
+      const assistantEl = appendMessage("assistant", "");
+      assistantEl.classList.add("typing");
+
+      const thinkingEl = assistantEl.querySelector(".thinking");
+      const thinkingBody = assistantEl.querySelector(".thinking-body");
+      const answerEl = assistantEl.querySelector(".answer");
+
+      let full = "";
+      let thinkingFull = "";
+
+      try {
+        const response = await fetch("/api/chat/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify({ message: text, history }),
+        });
+
+        if (!response.ok) {
+          let detail = "请求失败";
+          try {
+            const data = await response.json();
+            detail = data.error || detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.error) throw new Error(payload.error);
+            if (payload.done) continue;
+
+            if (payload.thinking) {
+              thinkingFull += payload.thinking;
+              thinkingEl.hidden = false;
+              thinkingBody.textContent = thinkingFull;
+              thinkingBody.scrollTop = thinkingBody.scrollHeight;
+              scrollMessagesToBottom();
+            }
+            if (payload.content) {
+              full += payload.content;
+              renderMarkdown(answerEl, full);
+              scrollMessagesToBottom();
+            }
+          }
+        }
+
+        assistantEl.classList.remove("typing");
+        if (!full) {
+          full = thinkingFull
+            ? "（仅返回了思维过程，没有最终回答）"
+            : "（模型未返回内容）";
+          renderMarkdown(answerEl, full);
+        }
+        if (thinkingEl && !thinkingEl.hidden) {
+          thinkingEl.open = false;
+        }
+
+        history.push({ role: "user", content: text });
+        history.push({ role: "assistant", content: full });
+      } catch (error) {
+        assistantEl.remove();
+        appendMessage("error", error.message || "发生未知错误");
+      } finally {
+        busy = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    });
+
+    refreshBtn.addEventListener("click", () => {
+      history.length = 0;
+      messagesEl.innerHTML = "";
+      emptyState = null;
+      showEmpty();
+      input.focus();
+    });
+
+    input.focus();
+  </script>
+</body>
+</html>
