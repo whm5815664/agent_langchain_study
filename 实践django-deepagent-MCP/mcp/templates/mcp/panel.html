@@ -1,0 +1,57 @@
+{# MCP 本机桥接设置弹窗 —— 由 chat 页面 include #}
+{% load static %}
+<link rel="stylesheet" href="{% static 'mcp/panel.css' %}" />
+
+<button type="button" class="mcp-open-btn" id="mcpOpenBtn" title="本机 MCP 桥接设置">
+  MCP 设置
+</button>
+<span class="mcp-bridge-pill offline" id="mcpBridgePill" title="本机 MCP 桥接状态">
+  <span class="dot" aria-hidden="true"></span>
+  <span id="mcpBridgeLabel">桥接未启动</span>
+</span>
+
+<dialog class="mcp-dialog" id="mcpDialog">
+  <form method="dialog" class="mcp-dialog-card" id="mcpForm">
+    <header class="mcp-dialog-head">
+      <div>
+        <h2>本机 MCP 桥接</h2>
+        <p>在此保存端口与程序路径；桥接服务请用 <code>mcp/startmcpserver/start_mcp.bat</code> 手动启动。</p>
+      </div>
+      <button type="submit" class="mcp-icon-close" value="cancel" aria-label="关闭">×</button>
+    </header>
+
+    <div class="mcp-dialog-body">
+      <section class="mcp-section">
+        <h3>服务端口</h3>
+        <label class="mcp-field">
+          <span>监听地址</span>
+          <input type="text" id="mcpHost" name="host" value="127.0.0.1" autocomplete="off" />
+        </label>
+        <label class="mcp-field">
+          <span>端口</span>
+          <input type="number" id="mcpPort" name="port" min="1" max="65535" value="18765" />
+        </label>
+        <p class="mcp-hint" id="mcpBaseUrlHint">将监听 http://127.0.0.1:18765</p>
+      </section>
+
+      <section class="mcp-section">
+        <h3>工具程序路径</h3>
+        <p class="mcp-hint">由 <code>tools/*.py</code> 的 <code>PROGRAMS</code> 自动发现；留空则走工具内自动探测。</p>
+        <div id="mcpProgramFields" class="mcp-program-fields"></div>
+      </section>
+
+      <section class="mcp-section">
+        <h3>状态</h3>
+        <p class="mcp-status-line" id="mcpStatusLine">尚未加载</p>
+        <p class="mcp-hint" id="mcpToolsLine"></p>
+        <p class="mcp-hint">启动命令：双击 <code>mcp/startmcpserver/start_mcp.bat</code>，或执行 <code>python -m mcp.startmcpserver</code>。停止请在该终端按 Ctrl+C。</p>
+      </section>
+    </div>
+
+    <footer class="mcp-dialog-foot">
+      <button type="button" class="mcp-btn primary" id="mcpSaveBtn">保存配置</button>
+    </footer>
+  </form>
+</dialog>
+
+<script src="{% static 'mcp/panel.js' %}"></script>

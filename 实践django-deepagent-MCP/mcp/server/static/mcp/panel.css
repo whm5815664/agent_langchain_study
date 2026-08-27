@@ -1,0 +1,236 @@
+/* MCP 设置弹窗（嵌入 chat） */
+
+.mcp-open-btn {
+  appearance: none;
+  border: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  background: #fff;
+  color: var(--ink, #1a2430);
+  border-radius: 14px;
+  height: 42px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.mcp-open-btn:hover {
+  border-color: rgba(31, 111, 235, 0.35);
+  background: var(--accent-soft, #dbe8fb);
+  transform: translateY(-1px);
+}
+
+.mcp-bridge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  background: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted, #5c6b7a);
+  white-space: nowrap;
+}
+
+.mcp-bridge-pill .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa7b5;
+}
+
+.mcp-bridge-pill.online {
+  color: var(--ok, #0f7b4c);
+  border-color: rgba(15, 123, 76, 0.25);
+}
+
+.mcp-bridge-pill.online .dot {
+  background: var(--ok, #0f7b4c);
+  box-shadow: 0 0 0 3px rgba(15, 123, 76, 0.15);
+}
+
+.mcp-bridge-pill.offline {
+  color: var(--danger, #b42318);
+}
+
+.mcp-bridge-pill.offline .dot {
+  background: var(--danger, #b42318);
+}
+
+.mcp-dialog {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: min(520px, calc(100vw - 32px));
+  width: 100%;
+}
+
+.mcp-dialog::backdrop {
+  background: rgba(21, 38, 61, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.mcp-dialog-card {
+  margin: 0;
+  border-radius: 20px;
+  border: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(21, 38, 61, 0.18);
+  overflow: hidden;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--ink, #1a2430);
+}
+
+.mcp-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+}
+
+.mcp-dialog-head h2 {
+  margin: 0;
+  font-family: "Segoe UI Semibold", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.mcp-dialog-head p {
+  margin: 6px 0 0;
+  color: var(--muted, #5c6b7a);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.mcp-icon-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted, #5c6b7a);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.mcp-icon-close:hover {
+  background: rgba(26, 36, 48, 0.06);
+}
+
+.mcp-dialog-body {
+  padding: 14px 20px 8px;
+  display: grid;
+  gap: 16px;
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+}
+
+.mcp-section h3 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+
+.mcp-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 0.86rem;
+}
+
+.mcp-field span {
+  color: var(--muted, #5c6b7a);
+  font-weight: 600;
+}
+
+.mcp-field input {
+  width: 100%;
+  border: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  outline: none;
+  background: #fff;
+}
+
+.mcp-field input:focus {
+  border-color: rgba(31, 111, 235, 0.45);
+  box-shadow: 0 0 0 3px var(--accent-soft, #dbe8fb);
+}
+
+.mcp-hint {
+  margin: 0;
+  color: var(--muted, #5c6b7a);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.mcp-hint code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+.mcp-program-fields {
+  display: grid;
+  gap: 4px;
+}
+
+.mcp-status-line {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.mcp-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  background: rgba(244, 241, 234, 0.35);
+}
+
+.mcp-btn {
+  appearance: none;
+  border: 1px solid var(--line, rgba(26, 36, 48, 0.1));
+  border-radius: 12px;
+  height: 40px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  background: #fff;
+  color: var(--ink, #1a2430);
+}
+
+.mcp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mcp-btn.primary {
+  border: 0;
+  background: var(--accent, #1f6feb);
+  color: #fff;
+}
+
+.mcp-btn.danger {
+  color: var(--danger, #b42318);
+  border-color: rgba(180, 35, 24, 0.25);
+}
+
+.mcp-btn.ghost:hover {
+  background: var(--accent-soft, #dbe8fb);
+}
+
+.header-actions .mcp-open-btn,
+.header-actions .mcp-bridge-pill {
+  align-self: flex-end;
+}

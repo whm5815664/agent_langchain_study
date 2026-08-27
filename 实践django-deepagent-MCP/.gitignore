@@ -5,3 +5,6 @@ __pycache__/
 venv/
 *.sqlite3
 .DS_Store
+certs/
+!certs/.gitkeep
+mcp_local_config.json

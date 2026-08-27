@@ -29,8 +29,12 @@ def chat_api(request):
     if not isinstance(history, list):
         return JsonResponse({"error": "history 必须是数组"}, status=400)
 
+    session_id = (payload.get("session_id") or "").strip()
+    if not session_id:
+        return JsonResponse({"error": "缺少 session_id（请保持页面 Edge MCP 已连接）"}, status=400)
+
     response = StreamingHttpResponse(
-        stream_chat_sse(history, message),
+        stream_chat_sse(history, message, session_id=session_id),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"
